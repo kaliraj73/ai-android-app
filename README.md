@@ -64,8 +64,14 @@ AI_Apps/
 ## Tooling notes
 
 - The Android app calls the Modal API directly via Retrofit.
+- Chat history is stored locally in the app files directory (`chat_history.json`).
+- Voice input uses Android's speech recognizer and requires microphone permission.
 - `shared-mcp/tools-config.json` defines MCP tool metadata that can be shared across services.
 - Update `.env.example` with your Modal token and any API keys you need.
+
+## CI
+
+- GitHub Actions builds a debug APK on every push/PR and uploads it as an artifact.
 
 ## Scripts
 

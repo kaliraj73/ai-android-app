@@ -15,5 +15,9 @@ class AIAppApplication : Application() {
     companion object {
         lateinit var instance: AIAppApplication
             private set
+
+        val chatHistoryStore by lazy {
+            com.yourapp.repository.ChatHistoryStore(instance.applicationContext)
+        }
     }
 }

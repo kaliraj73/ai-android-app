@@ -2,9 +2,11 @@ package com.yourapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yourapp.AIAppApplication
 import com.yourapp.data.model.ChatMessage
 import com.yourapp.data.model.UiState
 import com.yourapp.mcp.MCPClient
+import com.yourapp.repository.ChatHistoryStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +19,7 @@ import java.util.UUID
 class ChatViewModel : ViewModel() {
 
     private val mcpClient = MCPClient()
+    private val historyStore: ChatHistoryStore = AIAppApplication.chatHistoryStore
 
     // Chat messages
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -36,13 +39,19 @@ class ChatViewModel : ViewModel() {
     private val memorySessionId = UUID.randomUUID().toString()
 
     init {
-        // Add welcome message
-        _messages.value = listOf(
-            ChatMessage(
-                content = "Hello! I'm your AI assistant. Select a tool below or just chat with me!",
-                isUser = false
+        val storedMessages = historyStore.loadMessages()
+        if (storedMessages.isNotEmpty()) {
+            _messages.value = storedMessages
+        } else {
+            updateMessages(
+                listOf(
+                    ChatMessage(
+                        content = "Hello! I'm your AI assistant. Select a tool below or just chat with me!",
+                        isUser = false
+                    )
+                )
             )
-        )
+        }
         
         // Check connection
         checkConnection()
@@ -81,7 +90,7 @@ class ChatViewModel : ViewModel() {
         viewModelScope.launch {
             // Add user message
             val userMessage = ChatMessage(content = content, isUser = true)
-            _messages.value = _messages.value + userMessage
+            updateMessages(_messages.value + userMessage)
 
             // Show loading
             val loadingMessage = ChatMessage(
@@ -109,7 +118,7 @@ class ChatViewModel : ViewModel() {
             }
 
             // Remove loading message and add response
-            _messages.value = _messages.value.filterNot { it.isLoading }
+            val withoutLoading = _messages.value.filterNot { it.isLoading }
 
             result
                 .onSuccess { response ->
@@ -126,7 +135,7 @@ class ChatViewModel : ViewModel() {
                         content = responseText,
                         isUser = false
                     )
-                    _messages.value = _messages.value + aiMessage
+                    updateMessages(withoutLoading + aiMessage)
                 }
                 .onFailure { error ->
                     val errorMessage = ChatMessage(
@@ -134,7 +143,7 @@ class ChatViewModel : ViewModel() {
                         isUser = false,
                         error = error.message
                     )
-                    _messages.value = _messages.value + errorMessage
+                    updateMessages(withoutLoading + errorMessage)
                 }
         }
     }
@@ -143,10 +152,12 @@ class ChatViewModel : ViewModel() {
      * Clear all messages
      */
     fun clearMessages() {
-        _messages.value = listOf(
-            ChatMessage(
-                content = "Chat cleared. How can I help you?",
-                isUser = false
+        updateMessages(
+            listOf(
+                ChatMessage(
+                    content = "Chat cleared. How can I help you?",
+                    isUser = false
+                )
             )
         )
     }
@@ -251,7 +262,7 @@ class ChatViewModel : ViewModel() {
             val result = mcpClient.executeTool(toolName, params)
 
             // Remove loading message
-            _messages.value = _messages.value.filterNot { it.isLoading }
+            val withoutLoading = _messages.value.filterNot { it.isLoading }
 
             result
                 .onSuccess { response ->
@@ -259,7 +270,7 @@ class ChatViewModel : ViewModel() {
                         content = response,
                         isUser = false
                     )
-                    _messages.value = _messages.value + aiMessage
+                    updateMessages(withoutLoading + aiMessage)
                 }
                 .onFailure { error ->
                     val errorMessage = ChatMessage(
@@ -267,8 +278,13 @@ class ChatViewModel : ViewModel() {
                         isUser = false,
                         error = error.message
                     )
-                    _messages.value = _messages.value + errorMessage
+                    updateMessages(withoutLoading + errorMessage)
                 }
         }
+    }
+
+    private fun updateMessages(messages: List<ChatMessage>) {
+        _messages.value = messages
+        historyStore.saveMessages(messages.filterNot { it.isLoading })
     }
 }

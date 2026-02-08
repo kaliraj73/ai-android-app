@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.yourapp.aiapp"
+    namespace = "com.yourapp"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.yourapp.aiapp"
+        applicationId = "com.yourapp"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

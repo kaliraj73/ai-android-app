@@ -10,6 +10,10 @@ AI_Apps/
 │   ├── app/src/main/java/com/yourapp/
 │   │   ├── MainActivity.kt
 │   │   ├── AIAppApplication.kt
+│   │   ├── features/         # Feature modules (auth, chat, etc.)
+│   │   ├── common/           # Shared UI components or utilities
+│   │   ├── navigation/       # Jetpack Navigation setup
+│   │   ├── repository/       # Data repositories
 │   │   ├── api/              # Retrofit API service
 │   │   │   ├── ModalApiService.kt
 │   │   │   └── RetrofitClient.kt
@@ -46,6 +50,7 @@ AI_Apps/
 1. **Android app**
    - Open `android-app/` in Android Studio.
    - Update `RetrofitClient.BASE_URL` to your deployed Modal URL.
+   - Set `AuthRepository.updateToken(...)` after login/signup to send auth headers.
    - Run on device or emulator.
 
 2. **Modal backend**

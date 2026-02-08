@@ -52,6 +52,12 @@ fun ChatScreen(
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val selectedTool by viewModel.selectedTool.collectAsStateWithLifecycle()
     val availableTools = viewModel.availableTools
+    val quickPrompts = listOf(
+        "Summarize this",
+        "Create action items",
+        "Explain like I'm 5",
+        "Draft a reply"
+    )
 
     var inputText by remember { mutableStateOf("") }
     var isVoiceReplyEnabled by remember { mutableStateOf(true) }
@@ -256,6 +262,13 @@ fun ChatScreen(
                     onToolSelected = { viewModel.selectTool(it) }
                 )
                 
+                QuickPromptRow(
+                    prompts = quickPrompts,
+                    onPromptSelected = { prompt ->
+                        inputText = if (inputText.isBlank()) prompt else "$inputText $prompt"
+                    }
+                )
+
                 // Input area
                 ChatInput(
                     value = inputText,
@@ -508,6 +521,35 @@ private fun ToolSelector(
                     label = tool.displayName,
                     isSelected = selectedTool == tool.name,
                     onClick = { onToolSelected(tool.name) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickPromptRow(
+    prompts: List<String>,
+    onPromptSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (prompts.isEmpty()) return
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            prompts.take(4).forEach { prompt ->
+                AssistChip(
+                    onClick = { onPromptSelected(prompt) },
+                    label = { Text(prompt, fontSize = 12.sp) }
                 )
             }
         }

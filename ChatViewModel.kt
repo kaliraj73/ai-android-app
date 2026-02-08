@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * ViewModel for the Chat screen
@@ -31,6 +32,8 @@ class ChatViewModel : ViewModel() {
 
     // Available tools
     val availableTools = mcpClient.availableTools
+
+    private val memorySessionId = UUID.randomUUID().toString()
 
     init {
         // Add welcome message
@@ -93,6 +96,15 @@ class ChatViewModel : ViewModel() {
                 "generate_text" -> mcpClient.generateText(content)
                 "summarize_text" -> mcpClient.summarizeText(content)
                 "analyze_sentiment" -> mcpClient.analyzeSentiment(content)
+                "long_term_memory" -> mcpClient.chatWithMemory(memorySessionId, content)
+                "pdf_summarizer", "image_understanding" -> {
+                    val errorMessage = ChatMessage(
+                        content = "Please upload a ${if (_selectedTool.value == "pdf_summarizer") "PDF" else "image"} to use this tool.",
+                        isUser = false
+                    )
+                    _messages.value = _messages.value.filterNot { it.isLoading } + errorMessage
+                    return@launch
+                }
                 else -> mcpClient.generateText(content) // Default to text generation
             }
 
@@ -106,6 +118,7 @@ class ChatViewModel : ViewModel() {
                         is com.yourapp.data.model.SummarizeResponse -> response.summary
                         is com.yourapp.data.model.SentimentResponse -> 
                             "${response.sentiment} (confidence: ${"%.2f".format(response.confidence)})"
+                        is com.yourapp.data.model.MemoryResponse -> response.reply
                         else -> "Response received"
                     }
                     
@@ -136,6 +149,90 @@ class ChatViewModel : ViewModel() {
                 isUser = false
             )
         )
+    }
+
+    fun addSystemMessage(content: String) {
+        val message = ChatMessage(
+            content = content,
+            isUser = false
+        )
+        _messages.value = _messages.value + message
+    }
+
+    fun summarizePdf(filename: String, contentBase64: String) {
+        viewModelScope.launch {
+            val userMessage = ChatMessage(
+                content = "Uploaded PDF: $filename",
+                isUser = true
+            )
+            _messages.value = _messages.value + userMessage
+
+            val loadingMessage = ChatMessage(
+                content = "Summarizing PDF...",
+                isUser = false,
+                isLoading = true
+            )
+            _messages.value = _messages.value + loadingMessage
+
+            val result = mcpClient.summarizePdf(filename, contentBase64)
+
+            _messages.value = _messages.value.filterNot { it.isLoading }
+
+            result
+                .onSuccess { response ->
+                    val aiMessage = ChatMessage(
+                        content = response.summary,
+                        isUser = false
+                    )
+                    _messages.value = _messages.value + aiMessage
+                }
+                .onFailure { error ->
+                    val errorMessage = ChatMessage(
+                        content = "PDF summarization failed. Please try again.",
+                        isUser = false,
+                        error = error.message
+                    )
+                    _messages.value = _messages.value + errorMessage
+                }
+        }
+    }
+
+    fun describeImage(filename: String, imageBase64: String) {
+        viewModelScope.launch {
+            val userMessage = ChatMessage(
+                content = "Uploaded Image: $filename",
+                isUser = true
+            )
+            _messages.value = _messages.value + userMessage
+
+            val loadingMessage = ChatMessage(
+                content = "Analyzing image...",
+                isUser = false,
+                isLoading = true
+            )
+            _messages.value = _messages.value + loadingMessage
+
+            val result = mcpClient.describeImage(filename, imageBase64)
+
+            _messages.value = _messages.value.filterNot { it.isLoading }
+
+            result
+                .onSuccess { response ->
+                    val aiMessage = ChatMessage(
+                        content = response.description,
+                        isUser = false
+                    )
+                    _messages.value = _messages.value + aiMessage
+                }
+                .onFailure { error ->
+                    val errorMessage = ChatMessage(
+                        content = "Image understanding failed. Please try again.",
+                        isUser = false,
+                        error = error.message
+                    )
+                    _messages.value = _messages.value + errorMessage
+                }
+        }
     }
 
     /**

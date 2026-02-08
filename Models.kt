@@ -29,6 +29,27 @@ data class SentimentRequest(
     val text: String
 )
 
+data class MemoryRequest(
+    @SerializedName("session_id")
+    val sessionId: String,
+    @SerializedName("message")
+    val message: String
+)
+
+data class PdfSummaryRequest(
+    @SerializedName("filename")
+    val filename: String,
+    @SerializedName("content_base64")
+    val contentBase64: String
+)
+
+data class VisionRequest(
+    @SerializedName("filename")
+    val filename: String,
+    @SerializedName("image_base64")
+    val imageBase64: String
+)
+
 // Response models
 
 data class GenerateResponse(
@@ -56,6 +77,25 @@ data class SentimentResponse(
     val confidence: Float
 )
 
+data class MemoryResponse(
+    @SerializedName("reply")
+    val reply: String,
+    @SerializedName("memory_saved")
+    val memorySaved: Boolean
+)
+
+data class PdfSummaryResponse(
+    @SerializedName("summary")
+    val summary: String,
+    @SerializedName("page_count")
+    val pageCount: Int
+)
+
+data class VisionResponse(
+    @SerializedName("description")
+    val description: String
+)
+
 data class HealthResponse(
     @SerializedName("status")
     val status: String,
@@ -63,6 +103,19 @@ data class HealthResponse(
     val service: String,
     @SerializedName("version")
     val version: String
+)
+
+data class BackendStatusResponse(
+    @SerializedName("fastapi")
+    val fastapi: String,
+    @SerializedName("redis")
+    val redis: String,
+    @SerializedName("supabase")
+    val supabase: String,
+    @SerializedName("cloudflare")
+    val cloudflare: String,
+    @SerializedName("sentry")
+    val sentry: String
 )
 
 // Error response

@@ -25,4 +25,16 @@ interface ModalApiService {
 
     @POST("/sentiment")
     suspend fun analyzeSentiment(@Body request: SentimentRequest): Response<SentimentResponse>
+
+    @POST("/memory")
+    suspend fun chatWithMemory(@Body request: MemoryRequest): Response<MemoryResponse>
+
+    @POST("/pdf/summarize")
+    suspend fun summarizePdf(@Body request: PdfSummaryRequest): Response<PdfSummaryResponse>
+
+    @POST("/vision/describe")
+    suspend fun describeImage(@Body request: VisionRequest): Response<VisionResponse>
+
+    @GET("/backend/status")
+    suspend fun backendStatus(): Response<BackendStatusResponse>
 }

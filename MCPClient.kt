@@ -36,6 +36,24 @@ class MCPClient {
             displayName = "Sentiment Analysis",
             description = "Analyze the sentiment of text",
             icon = "😊"
+        ),
+        MCPToolInfo(
+            name = "long_term_memory",
+            displayName = "Long-term Memory",
+            description = "Remember chats across sessions using Supabase/Firebase",
+            icon = "🧠"
+        ),
+        MCPToolInfo(
+            name = "pdf_summarizer",
+            displayName = "PDF Summarizer",
+            description = "Upload a PDF and get a summary",
+            icon = "📄"
+        ),
+        MCPToolInfo(
+            name = "image_understanding",
+            displayName = "Image Understanding",
+            description = "Explain what's in an image",
+            icon = "🖼"
         )
     )
 
@@ -118,6 +136,66 @@ class MCPClient {
     }
 
     /**
+     * Chat with long-term memory persistence
+     */
+    suspend fun chatWithMemory(
+        sessionId: String,
+        message: String
+    ): Result<MemoryResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = MemoryRequest(sessionId = sessionId, message = message)
+            val response = apiService.chatWithMemory(request)
+            if (response.isSuccessful) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Memory chat failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Summarize a PDF by sending its base64 content
+     */
+    suspend fun summarizePdf(
+        filename: String,
+        contentBase64: String
+    ): Result<PdfSummaryResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = PdfSummaryRequest(filename = filename, contentBase64 = contentBase64)
+            val response = apiService.summarizePdf(request)
+            if (response.isSuccessful) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("PDF summarization failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Describe an image by sending its base64 content
+     */
+    suspend fun describeImage(
+        filename: String,
+        imageBase64: String
+    ): Result<VisionResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = VisionRequest(filename = filename, imageBase64 = imageBase64)
+            val response = apiService.describeImage(request)
+            if (response.isSuccessful) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Image understanding failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Execute a tool by name with parameters
      */
     suspend fun executeTool(
@@ -153,6 +231,39 @@ class MCPClient {
                     analyzeSentiment(text).map { 
                         "${it.sentiment} (confidence: ${"%.2f".format(it.confidence)})" 
                     }
+                }
+
+                "long_term_memory" -> {
+                    val sessionId = params["session_id"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'session_id' parameter")
+                    )
+                    val message = params["message"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'message' parameter")
+                    )
+
+                    chatWithMemory(sessionId, message).map { it.reply }
+                }
+
+                "pdf_summarizer" -> {
+                    val filename = params["filename"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'filename' parameter")
+                    )
+                    val contentBase64 = params["content_base64"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'content_base64' parameter")
+                    )
+
+                    summarizePdf(filename, contentBase64).map { it.summary }
+                }
+
+                "image_understanding" -> {
+                    val filename = params["filename"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'filename' parameter")
+                    )
+                    val imageBase64 = params["image_base64"] as? String ?: return@withContext Result.failure(
+                        IllegalArgumentException("Missing 'image_base64' parameter")
+                    )
+
+                    describeImage(filename, imageBase64).map { it.description }
                 }
                 
                 else -> Result.failure(IllegalArgumentException("Unknown tool: $toolName"))

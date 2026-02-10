@@ -1,20 +1,11 @@
 package com.yourapp.ui.screens
 
-import android.Manifest
-import android.content.Intent
-import android.provider.OpenableColumns
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.util.Base64
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,7 +14,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -32,14 +22,16 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yourapp.data.model.ChatMessage
 import com.yourapp.data.model.UiState
 import com.yourapp.mcp.MCPToolInfo
 import com.yourapp.ui.viewmodel.ChatViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import android.content.Intent
+import android.speech.RecognizerIntent
+import java.text.SimpleDateFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -52,111 +44,25 @@ fun ChatScreen(
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val selectedTool by viewModel.selectedTool.collectAsStateWithLifecycle()
     val availableTools = viewModel.availableTools
+    val quickPrompts = listOf(
+        "Summarize this",
+        "Create action items",
+        "Explain like I'm 5",
+        "Draft a reply"
+    )
 
     var inputText by remember { mutableStateOf("") }
-    var isVoiceReplyEnabled by remember { mutableStateOf(true) }
-    var isListening by remember { mutableStateOf(false) }
-    var lastSpokenMessageId by remember { mutableStateOf<String?>(null) }
-    var ttsReady by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
-    val scope = rememberCoroutineScope()
-
-    val textToSpeech = remember {
-        TextToSpeech(context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-        }
-    }
-
-    val speechRecognizer = remember {
-        SpeechRecognizer.createSpeechRecognizer(context)
-    }
-
-    DisposableEffect(textToSpeech) {
-        onDispose {
-            textToSpeech.stop()
-            textToSpeech.shutdown()
-        }
-    }
-
-    DisposableEffect(speechRecognizer) {
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: android.os.Bundle?) = Unit
-            override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
-            override fun onError(error: Int) {
-                isListening = false
-                viewModel.addSystemMessage("Voice input failed. Please try again.")
-            }
-
-            override fun onResults(results: android.os.Bundle?) {
-                val matches = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()
-                if (!matches.isNullOrBlank()) {
-                    inputText = matches
-                }
-                isListening = false
-            }
-
-            override fun onPartialResults(partialResults: android.os.Bundle?) = Unit
-            override fun onEvent(eventType: Int, params: android.os.Bundle?) = Unit
-        })
-
-        onDispose {
-            speechRecognizer.destroy()
-        }
-    }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            }
-            isListening = true
-            speechRecognizer.startListening(intent)
-        } else {
-            viewModel.addSystemMessage("Microphone permission denied.")
-        }
-    }
-
-    val pdfPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                val filename = getDisplayName(context, uri) ?: "document.pdf"
-                val base64 = readBase64FromUri(context, uri)
-                if (base64 != null) {
-                    viewModel.summarizePdf(filename, base64)
-                } else {
-                    viewModel.addSystemMessage("Unable to read PDF content.")
-                }
-            }
-        }
-    }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                val filename = getDisplayName(context, uri) ?: "image"
-                val base64 = readBase64FromUri(context, uri)
-                if (base64 != null) {
-                    viewModel.describeImage(filename, base64)
-                } else {
-                    viewModel.addSystemMessage("Unable to read image content.")
-                }
+    val context = LocalContext.current
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = matches?.firstOrNull().orEmpty()
+            if (spokenText.isNotBlank()) {
+                inputText = spokenText
             }
         }
     }
@@ -165,22 +71,6 @@ fun ChatScreen(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
-        }
-    }
-
-    LaunchedEffect(messages, isVoiceReplyEnabled, ttsReady) {
-        if (!isVoiceReplyEnabled || !ttsReady) return@LaunchedEffect
-
-        val latestMessage = messages.lastOrNull { !it.isUser && !it.isLoading && it.error == null }
-        if (latestMessage != null && latestMessage.id != lastSpokenMessageId) {
-            textToSpeech.language = Locale.getDefault()
-            textToSpeech.speak(
-                latestMessage.content,
-                TextToSpeech.QUEUE_FLUSH,
-                null,
-                latestMessage.id
-            )
-            lastSpokenMessageId = latestMessage.id
         }
     }
 
@@ -226,24 +116,6 @@ fun ChatScreen(
                             contentDescription = "Clear chat"
                         )
                     }
-
-                    IconToggleButton(
-                        checked = isVoiceReplyEnabled,
-                        onCheckedChange = { isVoiceReplyEnabled = it }
-                    ) {
-                        Icon(
-                            imageVector = if (isVoiceReplyEnabled) {
-                                Icons.Default.VolumeUp
-                            } else {
-                                Icons.Default.VolumeOff
-                            },
-                            contentDescription = if (isVoiceReplyEnabled) {
-                                "Disable voice reply"
-                            } else {
-                                "Enable voice reply"
-                            }
-                        )
-                    }
                 }
             )
         },
@@ -256,6 +128,13 @@ fun ChatScreen(
                     onToolSelected = { viewModel.selectTool(it) }
                 )
                 
+                QuickPromptRow(
+                    prompts = quickPrompts,
+                    onPromptSelected = { prompt ->
+                        inputText = if (inputText.isBlank()) prompt else "$inputText $prompt"
+                    }
+                )
+
                 // Input area
                 ChatInput(
                     value = inputText,
@@ -268,17 +147,16 @@ fun ChatScreen(
                         }
                     },
                     onVoiceInput = {
-                        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        } else {
-                            viewModel.addSystemMessage("Speech recognition is unavailable on this device.")
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(
+                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                            )
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your message")
                         }
+                        voiceLauncher.launch(intent)
                     },
-                    onPickPdf = { pdfPickerLauncher.launch("application/pdf") },
-                    onPickImage = { imagePickerLauncher.launch("image/*") },
-                    isPdfToolSelected = selectedTool == "pdf_summarizer",
-                    isImageToolSelected = selectedTool == "image_understanding",
-                    isListening = isListening,
                     isEnabled = connectionState is UiState.Success
                 )
             }
@@ -312,6 +190,9 @@ private fun ChatMessageItem(
     message: ChatMessage,
     modifier: Modifier = Modifier
 ) {
+    val timeLabel = remember(message.timestamp) {
+        SimpleDateFormat("h:mm a", Locale.getDefault()).format(message.timestamp)
+    }
     val backgroundColor = if (message.isUser) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -330,52 +211,87 @@ private fun ChatMessageItem(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = alignment
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(backgroundColor)
-                .padding(12.dp)
+        Row(
+            horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            when {
-                message.isLoading -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = textColor
-                        )
-                        Text(
-                            text = message.content,
-                            color = textColor,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-                message.error != null -> {
-                    Column {
-                        Text(
-                            text = message.content,
-                            color = textColor,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Error: ${message.error}",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-                else -> {
-                    Text(
-                        text = message.content,
-                        color = textColor,
-                        fontSize = 14.sp
+            if (!message.isUser) {
+                Surface(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(28.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SmartToy,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(6.dp)
                     )
                 }
+            }
+
+            Column(horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start) {
+                Text(
+                    text = if (message.isUser) "You" else "Assistant",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(backgroundColor)
+                        .padding(12.dp)
+                ) {
+                    when {
+                        message.isLoading -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = textColor
+                                )
+                                Text(
+                                    text = message.content,
+                                    color = textColor,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        message.error != null -> {
+                            Column {
+                                Text(
+                                    text = message.content,
+                                    color = textColor,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Error: ${message.error}",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        else -> {
+                            Text(
+                                text = message.content,
+                                color = textColor,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = timeLabel,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
             }
         }
     }
@@ -387,11 +303,6 @@ private fun ChatInput(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onVoiceInput: () -> Unit,
-    onPickPdf: () -> Unit,
-    onPickImage: () -> Unit,
-    isPdfToolSelected: Boolean,
-    isImageToolSelected: Boolean,
-    isListening: Boolean,
     isEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -406,53 +317,11 @@ private fun ChatInput(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(
-                onClick = onVoiceInput,
-                enabled = isEnabled && !isListening
-            ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                    contentDescription = if (isListening) "Listening..." else "Voice input"
-                )
-            }
-
-            if (isPdfToolSelected) {
-                IconButton(
-                    onClick = onPickPdf,
-                    enabled = isEnabled
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PictureAsPdf,
-                        contentDescription = "Upload PDF"
-                    )
-                }
-            }
-
-            if (isImageToolSelected) {
-                IconButton(
-                    onClick = onPickImage,
-                    enabled = isEnabled
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = "Upload image"
-                    )
-                }
-            }
-
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
                 modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        when {
-                            isPdfToolSelected -> "Upload a PDF to summarize..."
-                            isImageToolSelected -> "Upload an image to analyze..."
-                            else -> "Type a message..."
-                        }
-                    )
-                },
+                placeholder = { Text("Type a message...") },
                 enabled = isEnabled,
                 singleLine = false,
                 maxLines = 4,
@@ -460,6 +329,16 @@ private fun ChatInput(
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
                 shape = RoundedCornerShape(24.dp)
             )
+
+            IconButton(
+                onClick = onVoiceInput,
+                enabled = isEnabled
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice input"
+                )
+            }
             
             FloatingActionButton(
                 onClick = onSend,
@@ -508,6 +387,35 @@ private fun ToolSelector(
                     label = tool.displayName,
                     isSelected = selectedTool == tool.name,
                     onClick = { onToolSelected(tool.name) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickPromptRow(
+    prompts: List<String>,
+    onPromptSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (prompts.isEmpty()) return
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            prompts.take(4).forEach { prompt ->
+                AssistChip(
+                    onClick = { onPromptSelected(prompt) },
+                    label = { Text(prompt, fontSize = 12.sp) }
                 )
             }
         }
@@ -580,24 +488,4 @@ private fun EmptyChatMessage(
             )
         }
     }
-}
-
-private fun getDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
-    val resolver = context.contentResolver
-    val cursor = resolver.query(uri, null, null, null, null)
-    cursor?.use {
-        val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (nameIndex != -1 && it.moveToFirst()) {
-            return it.getString(nameIndex)
-        }
-    }
-    return null
-}
-
-private suspend fun readBase64FromUri(
-    context: android.content.Context,
-    uri: android.net.Uri
-): String? = withContext(Dispatchers.IO) {
-    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    bytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
 }

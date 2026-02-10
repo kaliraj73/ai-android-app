@@ -1,0 +1,28 @@
+{
+  "tools": [
+    {
+      "name": "generate_text",
+      "description": "Generate creative text using AI",
+      "parameters": {
+        "prompt": "string",
+        "max_tokens": 512,
+        "temperature": 0.7
+      }
+    },
+    {
+      "name": "summarize_text",
+      "description": "Summarize long text into key points",
+      "parameters": {
+        "text": "string",
+        "max_length": 150
+      }
+    },
+    {
+      "name": "analyze_sentiment",
+      "description": "Analyze the sentiment of text",
+      "parameters": {
+        "text": "string"
+      }
+    }
+  ]
+}

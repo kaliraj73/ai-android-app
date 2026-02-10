@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.yourapp.ai"
+    namespace = "com.example.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.yourapp.ai"
+        applicationId = "com.example.app"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -19,6 +19,15 @@ android {
         release {
             isMinifyEnabled = false
         }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 

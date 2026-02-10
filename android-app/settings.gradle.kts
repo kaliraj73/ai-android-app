@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "android-app"
+rootProject.name = "ai-android-app"
 include(":app")
